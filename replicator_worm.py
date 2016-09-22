@@ -251,7 +251,7 @@ def attackSystem(host):
             print "Wrong credential: " + username + " and password: " + password
             continue
         elif attemptResults == 3:
-            print "Host: " + host " is down or SSH is not running"
+            print "Host: " + host + " is down or SSH is not running"
             return None
 
     # Could not find working credentials
