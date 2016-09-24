@@ -374,13 +374,16 @@ def compressEncryptDelete(directory):
             return tarName + ".enc"
 
         except OSError as msg:
-            print "compressEncryptDelete function:" + msg
+            print "compressEncryptDelete function:"
+            print msg
             return None
         except shutil.Error as msg:
-            print "compressEncryptDelete function:" + msg
+            print "compressEncryptDelete function:"
+            print msg
             return None
         except tarfile.TarError as msg:
-            print "compressEncryptDelete function: " + tarName + ": " + msg
+            print "compressEncryptDelete function: " + tarName + ": "
+            print msg
             return None
 
     else:
