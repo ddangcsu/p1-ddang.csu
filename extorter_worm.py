@@ -343,7 +343,7 @@ def compressEncryptDelete(directory):
 
     if os.path.exists(directory):
         if not directory[-1] == "/":
-
+            directory += "/"
         # Set a tar name to ~/<name>.tar
         archiveName = directory.split("/")[-2]
         tarName = os.path.expanduser("~") + "/" + archiveName + ".tar"
