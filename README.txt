@@ -6,6 +6,18 @@
 ###############################################################################
 
 ###############################################################################
+#  Node Information
+###############################################################################
+VM1 (192.168.1.6) - Attacker Machine
+VM2 (192.168.1.4) - Victim 1
+VM3 (192.168.1.5) - Victim 2
+
+Login information:
+username: ubuntu
+password: 123456
+
+
+###############################################################################
 #  Assignment Objective
 ###############################################################################
 This assignment is to learn how to code a SSH worm that upon execute will self
@@ -130,7 +142,7 @@ The extorter worms beside the file in /tmp will also created files in /home/<use
 /home/<user>
         |-- Desktop/ransomBonus.txt - Extorter message from C++ worm
         |-- Desktop/ransomNote.txt  - Extorter message from Python worm
-        |-- Documents.tar.gz.enc    - Encrypted Documents folder python worm
+        |-- Documents.tar.enc    - Encrypted Documents folder python worm
         |-- Documents.tar.gz.bonus.enc  - Encrypted Documents folder C++ worm
 
 
